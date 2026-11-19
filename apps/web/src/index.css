@@ -1,0 +1,157 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* =========================================================================
+       Official Aurora Intelligence Palette Design Tokens
+       ========================================================================= */
+    --aurora-violet: #7565F6;
+    --midnight-indigo: #17172B;
+    --soft-lavender: #A99CFF;
+    --mint-green: #48C9A8;
+    --cloud-white: #F7F7FC;
+    --pure-white: #FFFFFF;
+    --deep-ink: #202033;
+    --slate: #74748A;
+    --mist: #E8E7F0;
+
+    /* Semantic Application Tokens - Light Mode */
+    --background: #F7F7FC;
+    --foreground: #202033;
+
+    --surface: #FFFFFF;
+    --surface-foreground: #202033;
+
+    --card: #FFFFFF;
+    --card-foreground: #202033;
+
+    --popover: #FFFFFF;
+    --popover-foreground: #202033;
+
+    --primary: #7565F6;
+    --primary-dark: #17172B;
+    --primary-foreground: #FFFFFF;
+    --primary-hover: #6453E8;
+
+    --secondary: #F2F0FF;
+    --secondary-foreground: #5B4CE0;
+
+    --accent: #48C9A8;
+    --accent-foreground: #094738;
+
+    --muted: #F0F0F5;
+    --muted-foreground: #74748A;
+
+    --destructive: #EF4444;
+    --destructive-foreground: #FFFFFF;
+
+    --success: #48C9A8;
+    --success-foreground: #094738;
+
+    --warning: #F59E0B;
+    --warning-foreground: #78350F;
+
+    --info: #3B82F6;
+    --info-foreground: #1E3A8A;
+
+    --border: #E8E7F0;
+    --input: #E8E7F0;
+    --ring: #7565F6;
+
+    --radius: 0.625rem; /* 10px */
+  }
+
+  .dark {
+    /* Semantic Application Tokens - Dark Mode (Midnight Indigo Base) */
+    --background: #0E0E1A;
+    --foreground: #F4F4FA;
+
+    --surface: #17172B;
+    --surface-foreground: #F4F4FA;
+
+    --card: #17172B;
+    --card-foreground: #F4F4FA;
+
+    --popover: #1B1B33;
+    --popover-foreground: #F4F4FA;
+
+    --primary: #8576FF;
+    --primary-dark: #0A0A14;
+    --primary-foreground: #FFFFFF;
+    --primary-hover: #978BFF;
+
+    --secondary: #262547;
+    --secondary-foreground: #D3CCFF;
+
+    --accent: #48C9A8;
+    --accent-foreground: #094738;
+
+    --muted: #222238;
+    --muted-foreground: #9A9AB5;
+
+    --destructive: #F87171;
+    --destructive-foreground: #450A0A;
+
+    --success: #48C9A8;
+    --success-foreground: #094738;
+
+    --warning: #FBBF24;
+    --warning-foreground: #78350F;
+
+    --info: #60A5FA;
+    --info-foreground: #1E3A8A;
+
+    --border: #2C2C45;
+    --input: #2C2C45;
+    --ring: #8576FF;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Accessibility Focus States */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Reduced Motion Preference Respect */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Custom Sleek Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}

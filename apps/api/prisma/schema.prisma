@@ -1,0 +1,559 @@
+// Generator: prisma/schema.prisma
+// Database: PostgreSQL
+// ORM: Prisma
+//
+// This schema defines the foundation tables for the AI Recruiter SaaS platform.
+// All tables are owned and migrated by this Node.js API service.
+// The Python AI service must NOT define its own migrations against this schema.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===========================================================================
+// ENUMS
+// ===========================================================================
+
+enum MembershipRole {
+  OWNER
+  ADMIN
+  RECRUITER
+  VIEWER
+}
+
+enum UserStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum JobStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+  CLOSED
+}
+
+enum CandidateStatus {
+  NEW
+  ACTIVE
+  ARCHIVED
+}
+
+enum ApplicationStatus {
+  APPLIED
+  SCREENING
+  INTERVIEW_SCHEDULED
+  INTERVIEW_COMPLETED
+  OFFERED
+  REJECTED
+  WITHDRAWN
+}
+
+enum ResumeParsingStatus {
+  PENDING
+  PARSED
+  FAILED
+}
+
+enum InterviewStatus {
+  DRAFT
+  SCHEDULED
+  INVITED
+  READY
+  IN_PROGRESS
+  PAUSED
+  COMPLETED
+  CANCELLED
+  EXPIRED
+  FAILED
+}
+
+enum InterviewType {
+  TECHNICAL
+  BEHAVIORAL
+  SCREENING
+  COMPREHENSIVE
+}
+
+enum QuestionCategory {
+  INTRODUCTORY
+  RESUME_BASED
+  JOB_BASED
+  TECHNICAL
+  SCENARIO
+  FOLLOW_UP
+  CANDIDATE_QUESTION
+}
+
+enum QuestionStatus {
+  PENDING
+  ASKED
+  ANSWERED
+  TIMED_OUT
+  SKIPPED
+}
+
+enum EvaluationRecommendation {
+  STRONG_HIRE
+  HIRE
+  CONSIDER
+  NO_HIRE
+}
+
+enum RecruiterDecision {
+  ADVANCE
+  HOLD
+  REJECT
+  REQUEST_INTERVIEW
+}
+
+// ===========================================================================
+// MODELS
+// ===========================================================================
+
+/// An Organisation (tenant) on the platform.
+model Organization {
+  id        String             @id @default(uuid())
+  name      String
+  slug      String             @unique
+  status    OrganizationStatus @default(ACTIVE)
+  logoUrl   String?
+  settings  Json               @default("{}")
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  // Relations
+  memberships    Membership[]
+  auditLogs      AuditLog[]
+  jobs           Job[]
+  candidates     Candidate[]
+  resumes        Resume[]
+  applications   Application[]
+  interviews     Interview[]
+  resumeAnalyses ResumeAnalysis[]
+
+  @@map("organizations")
+}
+
+/// A User account — shared across organisations via Memberships.
+model User {
+  id            String     @id @default(uuid())
+  email         String     @unique
+  passwordHash  String
+  firstName     String?
+  lastName      String?
+  avatarUrl     String?
+  emailVerified Boolean    @default(false)
+  status        UserStatus @default(PENDING_VERIFICATION)
+  lastLoginAt   DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  // Relations
+  memberships             Membership[]
+  auditLogs               AuditLog[]
+  refreshTokens           RefreshToken[]
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
+  jobsCreated             Job[]
+  interviewsCreated       Interview[]              @relation("InterviewsCreated")
+  interviewsDecided       Interview[]              @relation("InterviewsDecided")
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique
+  userId    String
+  family    String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([family])
+  @@map("refresh_tokens")
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+/// Links a User to an Organisation with a role.
+model Membership {
+  id             String         @id @default(uuid())
+  userId         String
+  organizationId String
+  role           MembershipRole @default(RECRUITER)
+  invitedEmail   String?
+  acceptedAt     DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  // Relations
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@map("memberships")
+}
+
+/// A Job posting belonging to an organization.
+model Job {
+  id               String        @id @default(uuid())
+  organizationId   String
+  title            String
+  department       String
+  location         String?       @default("Remote")
+  employmentType   String?       @default("FULL_TIME") // FULL_TIME, PART_TIME, CONTRACT, INTERN
+  experienceLevel  String?       @default("MID") // JUNIOR, MID, SENIOR, LEAD, EXECUTIVE
+  status           JobStatus     @default(PUBLISHED)
+  description      String        @db.Text
+  requirements     String?       @db.Text
+  responsibilities String?       @db.Text
+  skills           String[]      @default([])
+  createdById      String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  // Relations
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy      User?            @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  applications   Application[]
+  interviews     Interview[]
+  resumeAnalyses ResumeAnalysis[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@map("jobs")
+}
+
+/// A Candidate profile within an organization.
+model Candidate {
+  id              String          @id @default(uuid())
+  organizationId  String
+  firstName       String
+  lastName        String
+  email           String
+  phone           String?
+  location        String?
+  headline        String?
+  summary         String?         @db.Text
+  skills          String[]        @default([])
+  experienceYears Float?
+  status          CandidateStatus @default(NEW)
+  metadata        Json            @default("{}")
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relations
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  resumes      Resume[]
+  applications Application[]
+  interviews   Interview[]
+
+  @@unique([organizationId, email])
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@map("candidates")
+}
+
+/// Uploaded resume file and parsed structural representation.
+model Resume {
+  id             String              @id @default(uuid())
+  candidateId    String
+  organizationId String
+  fileName       String
+  fileSize       Int
+  fileType       String
+  storageKey     String              @unique
+  extractedText  String?             @db.Text
+  parsingStatus  ResumeParsingStatus @default(PENDING)
+  parsedData     Json?
+  errorMessage   String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  // Relations
+  candidate    Candidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  applications Application[]
+  analyses     ResumeAnalysis[]
+
+  @@index([candidateId])
+  @@index([organizationId])
+  @@map("resumes")
+}
+
+/// Deep AI structured analysis and job-fit matching for a resume.
+model ResumeAnalysis {
+  id                  String   @id @default(uuid())
+  organizationId      String
+  resumeId            String
+  jobId               String?
+  matchScore          Float?
+  technicalAlignment  Json?
+  structuredData      Json
+  strengths           String[] @default([])
+  gaps                String[] @default([])
+  suggestedTopics     String[] @default([])
+  evidence            Json?
+  rubricDetails       Json?
+  version             Int      @default(1)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  resume       Resume       @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  job          Job?         @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([resumeId])
+  @@index([jobId])
+  @@map("resume_analyses")
+}
+
+/// Tracks candidate progression through a specific job pipeline.
+model Application {
+  id             String            @id @default(uuid())
+  organizationId String
+  jobId          String
+  candidateId    String
+  resumeId       String?
+  status         ApplicationStatus @default(APPLIED)
+  stage          String            @default("Resume Screening")
+  matchScore     Float?
+  analysis       Json?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  job          Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidate    Candidate    @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  resume       Resume?      @relation(fields: [resumeId], references: [id], onDelete: SetNull)
+  interviews   Interview[]
+
+  @@unique([jobId, candidateId])
+  @@index([organizationId, status])
+  @@index([jobId, status])
+  @@index([candidateId])
+  @@map("applications")
+}
+
+/// An AI interview session orchestrated by Aarohi.
+model Interview {
+  id                     String             @id @default(uuid())
+  organizationId         String
+  jobId                  String
+  candidateId            String
+  applicationId          String?
+  createdById            String?
+
+  title                  String
+  type                   InterviewType      @default(TECHNICAL)
+  status                 InterviewStatus    @default(SCHEDULED)
+  language               String             @default("en")
+  durationMinutes        Int                @default(30)
+  questionTimeoutSeconds Int                @default(120)
+  instructions           String?            @db.Text
+
+  // Security: cryptographically secure access URL token hash
+  accessTokenHash        String             @unique
+  tokenExpiresAt         DateTime
+  tokenRevokedAt         DateTime?
+
+  // Real-time live room
+  livekitRoomName        String             @unique
+  currentQuestionIndex   Int                @default(0)
+
+  // Scheduling & Timing
+  scheduledAt            DateTime?
+  startedAt              DateTime?
+  completedAt            DateTime?
+
+  // Recruiter Decision
+  recruiterDecision      RecruiterDecision?
+  decisionNotes          String?            @db.Text
+  decidedAt              DateTime?
+  decidedById            String?
+
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  // Relations
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  job          Job                  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidate    Candidate            @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  application  Application?         @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  createdBy    User?                @relation("InterviewsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  decidedBy    User?                @relation("InterviewsDecided", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  questions    InterviewQuestion[]
+  events       InterviewEvent[]
+  consent      InterviewConsent?
+  evaluation   InterviewEvaluation?
+
+  @@index([organizationId, status])
+  @@index([jobId])
+  @@index([candidateId])
+  @@index([accessTokenHash])
+  @@map("interviews")
+}
+
+/// Individual question generated and asked in an interview.
+model InterviewQuestion {
+  id             String           @id @default(uuid())
+  interviewId    String
+  order          Int
+  text           String           @db.Text
+  topic          String?
+  category       QuestionCategory @default(TECHNICAL)
+  expectedPoints String[]         @default([])
+  status         QuestionStatus   @default(PENDING)
+  askedAt        DateTime?
+  deadlineAt     DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  interview Interview        @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  answer    InterviewAnswer?
+
+  @@unique([interviewId, order])
+  @@index([interviewId, status])
+  @@map("interview_questions")
+}
+
+/// Candidate's response to an interview question.
+model InterviewAnswer {
+  id                  String   @id @default(uuid())
+  questionId          String   @unique
+  audioStorageKey     String?
+  transcript          String   @db.Text
+  durationSeconds     Float?
+  latencyMs           Int?
+  isFollowUpGenerated Boolean  @default(false)
+  followUpQuestion    String?  @db.Text
+  submittedAt         DateTime @default(now())
+  createdAt           DateTime @default(now())
+
+  question InterviewQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@map("interview_answers")
+}
+
+/// Telemetry and integrity event tracking during candidate interview.
+model InterviewEvent {
+  id          String   @id @default(uuid())
+  interviewId String
+  eventType   String   // TAB_HIDDEN, TAB_VISIBLE, WINDOW_BLUR, FULLSCREEN_EXIT, TRACK_STOPPED, etc.
+  durationMs  Int?
+  metadata    Json     @default("{}")
+  recovered   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  interview Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  @@index([interviewId, createdAt])
+  @@map("interview_events")
+}
+
+/// Candidate explicit consent and privacy disclosures.
+model InterviewConsent {
+  id                    String   @id @default(uuid())
+  interviewId           String   @unique
+  aiDisclosureAccepted  Boolean  @default(true)
+  audioRecordingConsent Boolean  @default(false)
+  videoRecordingConsent Boolean  @default(false)
+  privacyPolicyVersion  String   @default("1.0")
+  ipAddress             String?
+  userAgent             String?
+  consentedAt           DateTime @default(now())
+
+  interview Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  @@map("interview_consents")
+}
+
+/// AI-generated rubric evaluation and candidate scoring report.
+model InterviewEvaluation {
+  id             String                    @id @default(uuid())
+  interviewId    String                    @unique
+  overallScore   Float?                    // 0-100
+  recommendation EvaluationRecommendation?
+  summary        String                    @db.Text
+  rubricScores   Json                      // Structured criteria ratings with transcript evidence
+  strengths      String[]                  @default([])
+  weaknesses     String[]                  @default([])
+  areasToClarify String[]                  @default([])
+  version        Int                       @default(1)
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+
+  interview Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  @@map("interview_evaluations")
+}
+
+/// Immutable audit trail for security-sensitive operations.
+model AuditLog {
+  id             String   @id @default(uuid())
+  organizationId String?
+  userId         String?
+  action         String   // e.g. "user.login", "job.created", "candidate.uploaded", "interview.created"
+  entityType     String?  // e.g. "Job", "Candidate", "Resume", "Interview"
+  entityId       String?
+  metadata       Json     @default("{}")
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+
+  // Relations (nullable — events can be system-generated without a user)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([action, createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
