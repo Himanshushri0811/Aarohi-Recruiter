@@ -1,5 +1,5 @@
 import pino from 'pino';
-import { env, isDevelopment } from './env.js';
+import { env, type Env } from './env.js';
 
 // ---------------------------------------------------------------------------
 // Pino structured logger
@@ -31,19 +31,23 @@ const developmentTransport: pino.TransportSingleOptions = {
   },
 };
 
-export const logger = pino({
-  name: 'ai-recruiter-api',
-  level: env.LOG_LEVEL,
-  redact: {
-    paths: REDACTED_PATHS,
-    censor: '[REDACTED]',
-  },
-  serializers: {
-    err: pino.stdSerializers.err,
-    error: pino.stdSerializers.err,
-  },
-  ...(isDevelopment() ? { transport: developmentTransport } : {}),
-});
+export function createLoggerOptions(nodeEnv: Env['NODE_ENV']): pino.LoggerOptions {
+  return {
+    name: 'ai-recruiter-api',
+    level: env.LOG_LEVEL,
+    redact: {
+      paths: REDACTED_PATHS,
+      censor: '[REDACTED]',
+    },
+    serializers: {
+      err: pino.stdSerializers.err,
+      error: pino.stdSerializers.err,
+    },
+    ...(nodeEnv === 'development' ? { transport: developmentTransport } : {}),
+  };
+}
+
+export const logger = pino(createLoggerOptions(env.NODE_ENV));
 
 export function redactSensitiveUrl(url: string): string {
   return url.replace(/[a-f0-9]{64}/gi, '[REDACTED]');
