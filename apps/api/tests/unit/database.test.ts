@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getPrismaClient, disconnectPrisma } from '../../src/config/database.js';
 import { getPrismaClient as getPrismaFromService } from '../../src/database/prisma.service.js';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 
 describe('Database Configuration & Prisma Singleton Lifecycle', () => {
   beforeEach(async () => {
@@ -14,6 +14,11 @@ describe('Database Configuration & Prisma Singleton Lifecycle', () => {
     expect(typeof prisma.$connect).toBe('function');
     expect(typeof prisma.$disconnect).toBe('function');
     expect(typeof prisma.$transaction).toBe('function');
+  });
+
+  it('maps the User model to the users table in PostgreSQL public schema', () => {
+    const userModel = Prisma.dmmf.datamodel.models.find((model) => model.name === 'User');
+    expect(userModel?.dbName).toBe('users');
   });
 
   it('maintains a single singleton instance across multiple calls without duplication', () => {

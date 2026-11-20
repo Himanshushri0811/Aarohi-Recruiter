@@ -1,92 +1,56 @@
 # AI Recruiter API — Database Schema
 
-## Owner
+## Ownership
 
-The Node.js API (`apps/api`) owns and migrates the primary PostgreSQL database.
+The Node.js API (`apps/api`) owns and migrates the primary PostgreSQL database. The Python AI service communicates with the API over HTTP and must not run migrations against this database.
 
-> **Important:** The Python AI service (`apps/ai-service`) must NOT define or run its own Prisma/Alembic migrations against this database. It communicates with the API over HTTP.
+The Prisma schema is `prisma/schema.prisma`. The `User` model maps to `public.users` through `@@map("users")`; PostgreSQL uses `public` as the default schema.
 
-## ORM
+## Database URL
 
-**Prisma 6** — schema located at `prisma/schema.prisma`.
+Configure the existing `DATABASE_URL` in the Render Node API environment with the existing Neon PostgreSQL connection string. Do not replace it with a localhost URL or commit it to source control. The API and Prisma CLI both read this variable.
 
-## Foundation Tables
+## Production migrations
 
-### `organizations`
-Multi-tenant root. Each company using the platform is one `Organization`.
-
-| Column | Type | Notes |
-|--------|------|-------|
-| id | UUID PK | Auto-generated |
-| name | String | Display name |
-| slug | String UNIQUE | URL-safe identifier |
-| status | Enum | ACTIVE / SUSPENDED / ARCHIVED |
-| logoUrl | String? | Optional CDN URL |
-| settings | JSON | Tenant-level feature flags |
-| createdAt | DateTime | |
-| updatedAt | DateTime | Auto-updated |
-
-### `users`
-Shared user accounts. One user can belong to multiple organisations via `Membership`.
-
-| Column | Type | Notes |
-|--------|------|-------|
-| id | UUID PK | |
-| email | String UNIQUE | |
-| passwordHash | String | Argon2id hash |
-| firstName | String? | |
-| lastName | String? | |
-| emailVerified | Boolean | Default: false |
-| status | Enum | PENDING_VERIFICATION / ACTIVE / SUSPENDED / DEACTIVATED |
-| lastLoginAt | DateTime? | |
-
-### `memberships`
-Links a `User` to an `Organization` with a role. Unique per (user, organization) pair.
-
-| Column | Type | Notes |
-|--------|------|-------|
-| role | Enum | OWNER / ADMIN / RECRUITER / VIEWER |
-| invitedEmail | String? | Email used during invitation |
-| acceptedAt | DateTime? | When invitation was accepted |
-
-### `audit_logs`
-Immutable security audit trail. Never update or delete rows.
-
-| Column | Type | Notes |
-|--------|------|-------|
-| action | String | e.g. `user.login`, `interview.created` |
-| entityType | String? | e.g. `Interview`, `Job` |
-| entityId | String? | UUID of the affected entity |
-| metadata | JSON | Contextual event data |
-| ipAddress | String? | Client IP |
-| userAgent | String? | Browser string |
-
-## Running Migrations
+The Render Docker image runs the following before starting the API:
 
 ```bash
-# First time setup
-cp .env.example .env
-# Fill in DATABASE_URL
+npx prisma migrate deploy
+```
 
-# Generate Prisma client (after schema changes)
+`prisma` is installed as a production dependency so the CLI and migration engine are present in the runtime image. The command uses the committed files in `prisma/migrations` and Prisma's `_prisma_migrations` history table. It is safe to rerun when migrations are already applied; failures stop the container before the API starts.
+
+Before deploying this startup behavior to an existing database, take a Neon backup/snapshot and inspect the database's schema and `_prisma_migrations` history. Do not assume it is empty. If tables already exist without matching migration records, or migration history is partial/inconsistent, **do not deploy or baseline automatically**; reconcile the actual schema and migration records first.
+
+To inspect status manually from `apps/api` with the production `DATABASE_URL` configured in a secure shell:
+
+```bash
+npx prisma migrate status
+```
+
+Do not print or paste the connection string in logs or support requests. Do not use `prisma migrate dev`, `prisma migrate reset`, `prisma db push`, or `prisma migrate resolve` against production.
+
+### Failed migration recovery
+
+1. Keep the failed API deployment stopped and preserve its migration logs.
+2. Take/confirm a database backup before any repair.
+3. Inspect the failed migration in `_prisma_migrations` and compare the actual tables, columns, indexes, constraints, and data with its SQL. Do not assume the migration rolled back completely.
+4. Do not reset the database or mark the migration applied/rolled back just to make deployment pass. If the schema has drifted or the migration partially applied, prepare and review a forward-only repair based on verified database state.
+5. Retry deployment only after the repair plan and impact are understood.
+
+## Readiness checks
+
+- `GET /api/v1/health/live` confirms the API process is running.
+- `GET /api/v1/health/ready` runs a database check. Expect HTTP 200 with `checks.database.status` equal to `healthy`; HTTP 503 indicates the API is not ready.
+
+## Local development
+
+Set `DATABASE_URL` to a development PostgreSQL database, then use:
+
+```bash
 npm run prisma:generate
-
-# Create and apply migration
 npm run prisma:migrate
-
-# Open Prisma Studio (GUI)
 npm run prisma:studio
 ```
 
-## Planned Phase 2 Tables
-
-| Table | Purpose |
-|-------|---------|
-| `jobs` | Job definitions with question banks |
-| `candidates` | Candidate profiles |
-| `applications` | Candidate × Job applications |
-| `interviews` | Interview sessions |
-| `interview_turns` | Per-turn transcript entries |
-| `evaluations` | AI evaluation scores and feedback |
-| `invitations` | Org membership invitations |
-| `refresh_tokens` | JWT refresh token store |
+`prisma:migrate` uses `prisma migrate dev` and is for development only.
