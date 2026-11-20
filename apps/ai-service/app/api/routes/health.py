@@ -90,7 +90,6 @@ def diagnostics_report() -> dict[str, Any]:
             "max_concurrent_interviews": settings.budget.max_concurrent_interviews,
             "cost_alert_threshold_usd": settings.budget.cost_alert_threshold_usd,
         },
-        "cors_origins": settings.cors_origins,
         "log_level": settings.log_level,
         "log_format": settings.log_format.value,
         "sensitive_data_masking_enabled": settings.enable_sensitive_data_masking,

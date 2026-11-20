@@ -139,10 +139,6 @@ class Settings(BaseSettings):
     api_v1_prefix: str = Field(default="/api/v1", alias="API_V1_PREFIX")
     host: str = Field(default="0.0.0.0", alias="HOST")
     port: int = Field(default=8000, ge=1, le=65535, alias="PORT")
-    cors_origins: list[str] = Field(
-        default=["http://localhost:3000", "http://localhost:5173"],
-        alias="CORS_ORIGINS",
-    )
 
     # Security & Auth
     secret_key: SecretStr = Field(

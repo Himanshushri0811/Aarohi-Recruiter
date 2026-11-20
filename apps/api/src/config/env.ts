@@ -4,7 +4,10 @@ import { z } from 'zod';
 // Environment schema
 // ---------------------------------------------------------------------------
 
-const envSchema = z.object({
+export const PRODUCTION_FRONTEND_ORIGIN = 'https://aarohi-recruiter-camd.vercel.app';
+export const PRODUCTION_AI_SERVICE_URL = 'https://aarohi-recruiter-1.onrender.com';
+
+export const envSchema = z.object({
   // Application
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(5000),
@@ -76,6 +79,88 @@ const envSchema = z.object({
     .enum(['true', 'false', ''])
     .transform((v) => v === 'true')
     .default('false'),
+}).superRefine((config, ctx) => {
+  if (config.NODE_ENV !== 'production') return;
+
+  const configuredOrigins = config.CORS_ORIGINS
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  if (
+    configuredOrigins.length !== 1 ||
+    configuredOrigins[0] !== PRODUCTION_FRONTEND_ORIGIN
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['CORS_ORIGINS'],
+      message: `Production CORS_ORIGINS must be exactly ${PRODUCTION_FRONTEND_ORIGIN}`,
+    });
+  }
+
+  if (config.APP_URL !== PRODUCTION_FRONTEND_ORIGIN) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['APP_URL'],
+      message: `Production APP_URL must be ${PRODUCTION_FRONTEND_ORIGIN}`,
+    });
+  }
+
+  if (config.AI_SERVICE_URL !== PRODUCTION_AI_SERVICE_URL) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['AI_SERVICE_URL'],
+      message: `Production AI_SERVICE_URL must be ${PRODUCTION_AI_SERVICE_URL}`,
+    });
+  }
+
+  if (!config.COOKIE_SECURE) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['COOKIE_SECURE'],
+      message: 'COOKIE_SECURE must be true in production',
+    });
+  }
+
+  const emailProviderConfigured =
+    Boolean(config.BREVO_API_KEY) ||
+    (config.EMAIL_PROVIDER !== 'brevo' && Boolean(config.SMTP_HOST));
+  if (!emailProviderConfigured) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['EMAIL_PROVIDER'],
+      message: 'Configure BREVO_API_KEY or SMTP_HOST for production email delivery',
+    });
+  }
+
+  const usesBrevo = config.EMAIL_PROVIDER === 'brevo' || Boolean(config.BREVO_API_KEY);
+  const productionEmailFrom = usesBrevo ? config.EMAIL_FROM_ADDRESS : config.EMAIL_FROM;
+  if (!productionEmailFrom || productionEmailFrom.endsWith('.local')) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [usesBrevo ? 'EMAIL_FROM_ADDRESS' : 'EMAIL_FROM'],
+      message: 'Configure a production email sender address',
+    });
+  }
+
+  if (
+    config.JWT_ACCESS_SECRET.includes('change_this_to') ||
+    config.JWT_REFRESH_SECRET.includes('change_this_to')
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['JWT_ACCESS_SECRET'],
+      message: 'Production JWT secrets must not be example placeholders',
+    });
+  }
+
+  if (config.JWT_ACCESS_SECRET === config.JWT_REFRESH_SECRET) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['JWT_REFRESH_SECRET'],
+      message: 'JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be different',
+    });
+  }
 });
 
 export type Env = z.infer<typeof envSchema>;

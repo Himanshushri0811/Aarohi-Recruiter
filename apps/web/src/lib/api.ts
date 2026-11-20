@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000/api/v1';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://aarohi-recruiter.onrender.com/api/v1';
 
 // In-memory access token storage (never localStorage to prevent XSS exfiltration)
 let _accessToken: string | null = null;
@@ -776,78 +776,3 @@ export const interviewAccessApi = {
       body: JSON.stringify({}),
     }),
 };
-
-// ---------------------------------------------------------------------------
-// AI Service API (proxied through Node.js API or called directly in dev)
-// ---------------------------------------------------------------------------
-
-const AI_SERVICE_BASE = import.meta.env.VITE_AI_SERVICE_URL ?? 'http://localhost:8000/api/v1';
-
-async function aiRequest<T>(path: string, options?: RequestInit): Promise<T> {
-  const resp = await fetch(`${AI_SERVICE_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    ...options,
-  });
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ detail: 'AI service error' }));
-    throw new Error(err.detail || `AI service error ${resp.status}`);
-  }
-  return resp.json() as Promise<T>;
-}
-
-export const aiInterviewApi = {
-  start: (body: {
-    interviewId: string;
-    candidateName: string;
-    jobTitle: string;
-    jobDescription?: string;
-    resumeText?: string;
-    language?: string;
-    instructions?: string;
-  }) => aiRequest<{
-    greeting: string;
-    firstQuestion: string;
-    audioBase64: string;
-    questionId?: string;
-  }>('/interview/start', { method: 'POST', body: JSON.stringify(body) }),
-
-  answer: (body: {
-    interviewId: string;
-    questionId: string;
-    questionText: string;
-    questionNumber: number;
-    totalQuestions: number;
-    audioBase64: string;
-    mimeType?: string;
-    history?: Array<{ question: string; answer: string; questionNumber: number }>;
-    candidateName?: string;
-    jobTitle?: string;
-    jobDescription?: string;
-    resumeSummary?: string;
-    technicalSkills?: string[];
-    language?: string;
-  }) => aiRequest<{
-    transcript: string;
-    nextQuestion?: string;
-    audioBase64?: string;
-    interviewComplete: boolean;
-    followUp?: string;
-  }>('/interview/answer', { method: 'POST', body: JSON.stringify(body) }),
-
-  evaluate: (body: {
-    interviewId: string;
-    jobTitle: string;
-    jobDescription?: string;
-    resumeText?: string;
-    transcript: Array<{ question: string; answer: string; questionNumber: number }>;
-  }) => aiRequest<{
-    overallScore: number;
-    recommendation: string;
-    summary: string;
-    rubricScores: Record<string, unknown>;
-    strengths: string[];
-    weaknesses: string[];
-    areasToClarify: string[];
-  }>('/interview/evaluate', { method: 'POST', body: JSON.stringify(body) }),
-};
-

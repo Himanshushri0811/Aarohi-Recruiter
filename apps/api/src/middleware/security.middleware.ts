@@ -3,6 +3,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import express, { Application, RequestHandler } from 'express';
+import { AppError } from '../common/errors/app-error.js';
 import { env, getCorsOrigins, isTest } from '../config/env.js';
 
 // ---------------------------------------------------------------------------
@@ -22,7 +23,19 @@ export function applySecurityMiddleware(app: Application): void {
   const origins = getCorsOrigins();
   app.use(
     cors({
-      origin: origins.length === 1 ? origins[0] : origins,
+      origin: (origin, callback) => {
+        if (!origin) {
+          callback(null, false);
+          return;
+        }
+
+        if (!origins.includes(origin)) {
+          callback(AppError.forbidden('Origin is not allowed by CORS'));
+          return;
+        }
+
+        callback(null, true);
+      },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
