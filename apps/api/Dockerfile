@@ -7,6 +7,10 @@
 # ---------------------------
 FROM node:22-slim AS builder
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Install dependencies first (layer caching)
@@ -29,6 +33,10 @@ RUN npm run build
 # ---------------------------
 FROM node:22-slim AS runtime
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Security: run as non-root user
 RUN groupadd --gid 1001 nodejs && \
     useradd --uid 1001 --gid nodejs --shell /bin/sh --create-home app
@@ -37,7 +45,7 @@ WORKDIR /app
 
 # Copy production dependencies
 COPY package*.json ./
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+RUN npm ci --omit=dev && npm cache clean --force
 
 # Copy compiled app and Prisma client
 COPY --from=builder /app/dist ./dist
@@ -57,4 +65,4 @@ EXPOSE 5000
 
 ENV NODE_ENV=production
 
-CMD ["node", "dist/server.js"]
+CMD ["npm", "start"]
