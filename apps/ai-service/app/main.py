@@ -6,7 +6,6 @@ and route registrations.
 """
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.middleware.correlation import CorrelationIdMiddleware
 from app.api.middleware.error_handler import (
@@ -41,23 +40,14 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # 1. Register Cross-Origin Resource Sharing (CORS)
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origins,
-        allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allow_headers=["*"],
-    )
-
-    # 2. Register Request Tracing Middleware
+    # 1. Register Request Tracing Middleware
     app.add_middleware(CorrelationIdMiddleware)
 
-    # 3. Register Domain Exception Handlers
+    # 2. Register Domain Exception Handlers
     app.add_exception_handler(AarohiException, aarohi_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
 
-    # 4. Register Routes
+    # 3. Register Routes
     # Root level health for container orchestrator probes
     app.include_router(health_router)
     # Versioned API routes

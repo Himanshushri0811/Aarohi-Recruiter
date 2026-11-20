@@ -61,6 +61,22 @@ def test_production_rejects_debug_mode():
         )
 
 
+def test_production_accepts_configured_gemini_groq_and_gemini_tts_providers():
+    settings = Settings(
+        APP_ENV=EnvironmentType.PRODUCTION,
+        DEBUG=False,
+        SECRET_KEY="production_service_signing_secret_at_least_32_chars",
+        ALGORITHM="HS256",
+        LLM={"provider": "gemini", "gemini_api_key": "test-gemini-key"},
+        STT={"provider": "groq", "groq_api_key": "test-groq-key"},
+        TTS={"provider": "gemini_tts", "gemini_api_key": "test-gemini-key"},
+    )
+
+    assert settings.app_env == EnvironmentType.PRODUCTION
+    assert settings.debug is False
+    assert settings.algorithm == "HS256"
+
+
 def test_production_rejects_insecure_default_secret_key():
     """Verify production forbids default insecure secret keys."""
     with pytest.raises(

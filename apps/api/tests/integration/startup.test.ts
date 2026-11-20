@@ -10,7 +10,8 @@ process.env.PORT = '5002';
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test_db';
 process.env.JWT_ACCESS_SECRET = 'startup_test_access_secret_at_least_32_chars_ok';
 process.env.JWT_REFRESH_SECRET = 'startup_test_refresh_secret_at_least_32_chars_ok';
-process.env.CORS_ORIGINS = 'http://localhost:3000';
+process.env.CORS_ORIGINS =
+  'http://localhost:3000,https://aarohi-recruiter-camd.vercel.app';
 process.env.LOG_LEVEL = 'silent';
 
 // ---------------------------------------------------------------------------
@@ -103,6 +104,11 @@ function inProcess(
       send: (data: unknown) => resolveWith(data),
       end: (data?: string | Buffer) => resolveWith(data),
     });
+    Object.defineProperty(res, 'statusCode', {
+      get: () => statusCode,
+      set: (value: number) => { statusCode = value; },
+      configurable: true,
+    });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (app as any).handle(req, res, () => resolve({ status: 404, headers: {}, body: null }));
@@ -144,6 +150,38 @@ describe('Request ID middleware', () => {
     const r1 = await inProcess(app, 'GET', '/api/v1/health/live');
     const r2 = await inProcess(app, 'GET', '/api/v1/health/live');
     expect(r1.headers['x-request-id']).not.toBe(r2.headers['x-request-id']);
+  });
+});
+
+describe('CORS middleware', () => {
+  it('accepts the production frontend preflight with credentials and required headers', async () => {
+    const res = await inProcess(app, 'OPTIONS', '/api/v1/health/live', {
+      origin: 'https://aarohi-recruiter-camd.vercel.app',
+      'access-control-request-method': 'POST',
+      'access-control-request-headers': 'authorization,content-type',
+    });
+
+    expect(res.status).toBe(204);
+    expect(res.headers['access-control-allow-origin']).toBe(
+      'https://aarohi-recruiter-camd.vercel.app',
+    );
+    expect(res.headers['access-control-allow-credentials']).toBe('true');
+    const allowedMethods = res.headers['access-control-allow-methods'] as string;
+    for (const method of ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']) {
+      expect(allowedMethods).toContain(method);
+    }
+    expect(res.headers['access-control-allow-headers']).toContain('Authorization');
+    expect(res.headers['access-control-allow-headers']).toContain('Content-Type');
+  });
+
+  it('rejects preflights from an untrusted origin', async () => {
+    const res = await inProcess(app, 'OPTIONS', '/api/v1/health/live', {
+      origin: 'https://untrusted.example',
+      'access-control-request-method': 'POST',
+    });
+
+    expect(res.status).toBe(403);
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
   });
 });
 

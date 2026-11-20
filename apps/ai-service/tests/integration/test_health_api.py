@@ -20,14 +20,33 @@ def test_root_endpoint():
     assert data["version"] == "0.1.0"
 
 
+def test_ai_service_does_not_allow_browser_cors(test_client):
+    response = test_client.options(
+        "/api/v1/resume/analyze",
+        headers={
+            "Origin": "https://aarohi-recruiter-camd.vercel.app",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+
+    assert response.status_code == 405
+    assert "access-control-allow-origin" not in response.headers
+
+
 def test_liveness_probe():
     """Verify /health/live returns 200 alive status."""
     data = liveness_probe()
     assert data["status"] == "alive"
 
 
-def test_readiness_probe():
+def test_readiness_probe(monkeypatch):
     """Verify /health/ready returns provider status checks."""
+    settings = get_settings()
+    settings.livekit.url = "wss://livekit.example.com"
+    settings.livekit.api_key = "test-livekit-key"
+    settings.livekit.api_secret = SecretStr("test-livekit-secret")
+    monkeypatch.setattr("app.api.routes.health.get_settings", lambda: settings)
+
     data = readiness_probe()
     assert data["status"] == "ready"
     assert "providers" in data
@@ -55,6 +74,7 @@ def test_diagnostics_probe():
     assert "budget_limits" in data
     assert data["budget_limits"]["max_interview_duration_minutes"] == 45
     assert data["sensitive_data_masking_enabled"] is True
+    assert "cors_origins" not in data
 
 
 def test_router_registration():
